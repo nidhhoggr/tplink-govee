@@ -168,13 +168,15 @@ for (const ip in scannedDevices) {
 await scanAndProcessDevices(deviceByMacAddrMap);
 
 if (!DRYRUN) {
-  const interval = _.get(rootConfig, 'daemon_interval', 5 * 60 * 1000);
-  logger.info(`Waiting ${interval} milliseconds before checking again`); 
-  setInterval( async () => {
-    // Execute the main workflow
-    await scanAndProcessDevices(deviceByMacAddrMap);
-  }, interval)//every 5 minutes
-} else {
-  await sleep(1000);
-  process.exit(0);
+  const interval = _.get(rootConfig, 'daemon_interval');
+  if (interval) {
+    logger.info(`Waiting ${interval} milliseconds before checking again`); 
+    setInterval( async () => {
+      // Execute the main workflow
+      await scanAndProcessDevices(deviceByMacAddrMap);
+    }, interval)//every 5 minutes
+  }
 }
+
+await sleep(1000);
+process.exit(0);
