@@ -3,8 +3,13 @@ import getopt from 'node-getopt';
 import IotProbe from './tplink/src/iot-probe/index.js';
 import * as tplink from './tplink/src/index.js';
 import * as govee from './govee/index.js';
-import { sleep, Logger, loadJson, getDirname} from './tplink/src/utils/index.js';
-const rootConfig = await loadJson(getDirname(import.meta.url) + '/config.json');
+import { 
+  sleep,
+  Logger,
+  loadJson,
+  getDirnameFromFile
+} from './tplink/src/utils/index.js';
+const rootConfig = await loadJson(getDirnameFromFile(import.meta.url) + '/config.json');
 
 // Command line options configuration
 const opt = getopt.create([
@@ -12,12 +17,14 @@ const opt = getopt.create([
   ['h', 'help', 'Display this help'],
   ['d', 'debug', 'Enable debug logging'],
   ['c', 'cache-clear', 'Clear the cache'],
+  ['r', 'dry-run', 'Dry Run'],
 ]).bindHelp();
 
 // Parse command line arguments
 const { options } = opt.parseSystem();
 
 const DEBUG_MODE = _.get(options, 'debug', false);
+const DRYRUN = _.get(options, 'dry-run', false);
 const nicknameFilter = _.get(options, 'nickname');
 const logger = Logger(DEBUG_MODE);
 
@@ -57,7 +64,12 @@ async function toggleDevicePower(device, deviceInfo) {
   try {
     const action = deviceInfo.device_on ? 'Off' : 'On';
     logger.info(`Turning ${action} device "${deviceInfo.nickname}"...`);
-    
+ 
+    if (DRYRUN) {
+      logger.info(`DRYRUN, return early`);
+      return;
+    }
+
     await sleep(DELAY_MS);
     await device[`turn${action}`]();
     await sleep(DELAY_MS);
@@ -73,10 +85,12 @@ async function toggleDevicePower(device, deviceInfo) {
 
 async function scanAndProcessDevices(deviceByMacAddrMap) {
   try {
-    
+   
+    logger.info(`scanning for govee devices`);
+
     const goveeDevices = await govee.getDevices({
       expectedCount: _.get(rootConfig, "govee.expected_device_count"),
-      timeout: 60000
+      timeout: _.get(rootConfig, "govee.timeout", 60000),
     });
 
     logger.info(goveeDevices['devices']);
@@ -135,6 +149,9 @@ async function scanAndProcessDevices(deviceByMacAddrMap) {
 logger.info('Starting Tapo device control script');
 if (nicknameFilter) logger.info(`Nickname filter: "${nicknameFilter}"`);
 const scannerConfig = _.get(rootConfig, 'plug_probe', {});
+if (!SCAN_CACHE) {
+  scannerConfig.clearCache = true;
+}
 const scanner = new IotProbe(scannerConfig);
 const scannedDevices = await _.invoke(scanner, 'scan', SCAN_CACHE);
 const deviceIPs = _.keys(scannedDevices);
@@ -148,7 +165,16 @@ for (const ip in scannedDevices) {
   deviceByMacAddrMap[info.mac] = {device, info};
 }
 
-setInterval( async () => {
-  // Execute the main workflow
-  await scanAndProcessDevices(deviceByMacAddrMap);
-}, 60000 * 5)//every 5 minutes
+await scanAndProcessDevices(deviceByMacAddrMap);
+
+if (!DRYRUN) {
+  const interval = _.get(rootConfig, 'daemon_interval', 5 * 60 * 1000);
+  logger.info(`Waiting ${interval} milliseconds before checking again`); 
+  setInterval( async () => {
+    // Execute the main workflow
+    await scanAndProcessDevices(deviceByMacAddrMap);
+  }, interval)//every 5 minutes
+} else {
+  await sleep(1000);
+  process.exit(0);
+}
