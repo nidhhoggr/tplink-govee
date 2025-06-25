@@ -1,0 +1,8 @@
+{
+  "type": "module",
+  "dependencies": {
+    "@stoprocent/noble": "^2.3.2",
+    "debug": "^4.4.1",
+    "lodash": "^4.17.21"
+  }
+}
