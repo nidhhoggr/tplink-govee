@@ -1,0 +1,76 @@
+{
+  "daemon_interval": 0,
+  "tapo": {
+    "email": "tapo-account@email.com",
+    "password": "XXXXXXXXXXXX",
+    "networkPrefix": "192.168.0"
+  },
+  "govee": {
+    "expected_device_count": 3
+  },
+  "plug_probe": {
+    "networkPrefix": "192.168.0",
+    "expectedResponse": "<html><body><center>200 OK</center></body></html>",
+    "cacheTtlMs": 180000000,
+    "concurrentRequests": 30,
+    "cacheFile": "/../../cache/ip-scanner-cache.json"
+  },
+  "thermometers": [
+    {
+      "mac_addr": "e1:3d:05:c6:41:87",
+      "name": "Bo's thermometer",
+      "plugs_managed": [
+        {
+          "name": "Bo's Basking Lamp",
+          "mac_addr": "BC-07-1D-2C-33-EB",
+          "conditions": [
+            {
+              "type": "turn_off",
+              "when": {
+                "key": "tempInF",
+                "comparator": "gte",
+                "value": "88"
+              }
+            },
+            {
+              "type": "turn_on",
+              "when": {
+                "key": "tempInF",
+                "comparator": "lt",
+                "value": "85"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "mac_addr": "e1:3d:04:46:1e:5c",
+      "name": "Nils's thermometer",
+      "plugs_managed": [
+        {
+          "name": "Nils's Basking Lamp",
+          "mac_addr": "BC-07-1D-2C-57-EF",
+          "conditions": [
+            {
+              "type": "turn_off",
+              "when": {
+                "key": "tempInF",
+                "comparator": "gte",
+                "value": "88"
+              }
+            },
+            {
+              "type": "turn_on",
+              "when": {
+                "key": "tempInF",
+                "comparator": "lt",
+                "value": "85"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
