@@ -64,19 +64,17 @@ async function toggleDevicePower(device, deviceInfo) {
   try {
     const action = deviceInfo.device_on ? 'Off' : 'On';
     logger.info(`Turning ${action} device "${deviceInfo.nickname}"...`);
- 
     if (DRYRUN) {
       logger.info(`DRYRUN, return early`);
       return;
     }
-
     await sleep(DELAY_MS);
     await device[`turn${action}`]();
     await sleep(DELAY_MS);
-    
     const newState = await device.getDeviceInfo();
     logger.info(`Device "${deviceInfo.nickname}" turned ${action} successfully.`);
     logger.debug('New state:', newState);
+    return newState;
   } catch (error) {
     logger.error(`Power toggle failed: ${_.get(error, 'message', error)}`);
     throw error;
@@ -97,14 +95,19 @@ async function scanAndProcessDevices(deviceByMacAddrMap) {
 
     const plugMgmtConfig = _.get(rootConfig, "thermometers");
 
-    _.forEach(plugMgmtConfig, (t) => {
-
+    for (const i in plugMgmtConfig) {
+      const t = plugMgmtConfig[i];
       const found = _.find(_.get(goveeDevices, 'devices'), (d) => d.address === t.mac_addr);
       console.log({found})
       if (found) {
         if (_.get(t, 'plugs_managed.length') > 0) {
           logger.info(`Evaludating plugs for thermometer: ${t.name}`);
-          _.forEach(t.plugs_managed, (pm) => {
+          for (const j in t.plugs_managed) {
+            const pm = t.plugs_managed[j];
+            if (!_.keys(deviceByMacAddrMap).includes(pm.mac_addr)) {
+              logger.info(`scanned plugs don't have a device with this mac address: ${pm.mac_addr}. Consider clearing cache!`);
+              return;
+            }
             const { device , info } = deviceByMacAddrMap[pm.mac_addr];
             logger.info(`Evaluating plug conditions for plug ${info.nickname} - Turned On (${info.device_on})`);
             const condTurnOff = _.find(pm.conditions, (pc) => pc.type == "turn_off");
@@ -113,7 +116,7 @@ async function scanAndProcessDevices(deviceByMacAddrMap) {
               console.log({shouldTurnOff, device_on: info.device_on});
               if (info.device_on && shouldTurnOff) {
                 logger.info(`Should turn off device ${info.nickname}`);
-                toggleDevicePower(device, info);
+                await toggleDevicePower(device, info)
               } else if (!info.device_on && shouldTurnOff) {
                 logger.info(`Device is already turned off, not turning off`);
               } else if (info.device_on && !shouldTurnOff) {
@@ -129,17 +132,17 @@ async function scanAndProcessDevices(deviceByMacAddrMap) {
               console.log({shouldTurnOn, device_on: info.device_on});
               if (!info.device_on && shouldTurnOn) {
                 logger.info(`Should turn on device ${info.nickname}`);
-                toggleDevicePower(device, info);
+                await toggleDevicePower(device, info);
               } else if (info.device_on && shouldTurnOn) {
                 logger.info(`Device is already on`);
               } else if (!info.device_on && !shouldTurnOn) {
                 logger.info(`Device did not meet turn on condition, leaving off`);
               }
             }
-          });
+          }
         }
       }
-    });
+    }
   } catch (error) {
     logger.error('Execution failed:', _.get(error, 'message', error));
     process.exit(1);
