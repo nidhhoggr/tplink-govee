@@ -81,7 +81,7 @@ async function toggleDevicePower(device, deviceInfo) {
   }
 }
 
-async function scanAndProcessDevices(deviceByMacAddrMap) {
+async function scanAndProcessDevices({deviceByMacAddrMap, staleCacheHandler}) {
   try {
    
     logger.info(`scanning for govee devices`);
@@ -105,8 +105,7 @@ async function scanAndProcessDevices(deviceByMacAddrMap) {
           for (const j in t.plugs_managed) {
             const pm = t.plugs_managed[j];
             if (!_.keys(deviceByMacAddrMap).includes(pm.mac_addr)) {
-              logger.info(`scanned plugs don't have a device with this mac address: ${pm.mac_addr}. Consider clearing cache!`);
-              return;
+              throw new Error(`scanned plugs don't have a device with this mac address: ${pm.mac_addr}. Consider clearing cache!`);
             }
             const { device , info } = deviceByMacAddrMap[pm.mac_addr];
             logger.info(`Evaluating plug conditions for plug ${info.nickname} - Turned On (${info.device_on})`);
@@ -144,7 +143,11 @@ async function scanAndProcessDevices(deviceByMacAddrMap) {
       }
     }
   } catch (error) {
-    logger.error('Execution failed:', _.get(error, 'message', error));
+    const errMsg = _.get(error, 'message', error);
+    logger.error('Execution failed:', errMsg);
+    if (errMsg.includes("Consider clearing cache") && _.isFunction(staleCacheHandler)) {
+      await staleCacheHandler();
+    }
     process.exit(1);
   }
 }
@@ -168,7 +171,12 @@ for (const ip in scannedDevices) {
   deviceByMacAddrMap[info.mac] = {device, info};
 }
 
-await scanAndProcessDevices(deviceByMacAddrMap);
+const staleCacheHandler = async () => {
+  logger.info(`stale cache handler attempting to clear the cache`);
+  await scanner.clearCache();
+}
+
+await scanAndProcessDevices({deviceByMacAddrMap, staleCacheHandler});
 
 if (!DRYRUN) {
   const interval = _.get(rootConfig, 'daemon_interval');
@@ -176,7 +184,7 @@ if (!DRYRUN) {
     logger.info(`Waiting ${interval} milliseconds before checking again`); 
     setInterval( async () => {
       // Execute the main workflow
-      await scanAndProcessDevices(deviceByMacAddrMap);
+      await scanAndProcessDevices({deviceByMacAddrMap, staleCacheHandler});
     }, interval)//every 5 minutes
   }
 }

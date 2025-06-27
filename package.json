@@ -1,4 +1,7 @@
 {
+  "type": "module",
+  "name": "tplink-govee",
+  "author": "nidhhoggr",
   "dependencies": {
     "lodash": "^4.17.21",
     "node-getopt": "^0.3.2"
