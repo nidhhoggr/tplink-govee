@@ -38,6 +38,24 @@ function isNumeric(x) {
     (x != Number.POSITIVE_INFINITY) && (x != Number.NEGATIVE_INFINITY);
 }
 
+const validateThermometerConfig = (config) => {
+  if (!config.mac_addr) throw new Error("Missing Govee thermometer MAC address!");
+  if (!config.plugs_managed?.length) throw new Error("No plugs configured!");
+
+  config.plugs_managed.forEach(plug => {
+    if (!plug.mac_addr) throw new Error(`Plug "${plug.name}" missing TPLink Plug MAC address!`);
+    plug.conditions.forEach(condition => {
+      const validComparators = ["gt", "gte", "lt", "lte"];
+      if (!validComparators.includes(condition.when.comparator)) {
+        throw new Error(`Invalid comparator "${condition.when.comparator}" in plug "${plug.name}"`);
+      }
+      if (isNaN(parseFloat(condition.when.value))) {
+        throw new Error(`Temperature value must be a number in plug "${plug.name}"`);
+      }
+    });
+  });
+};
+
 function isConditionMet(thermo, condition) {
   console.log(thermo, condition);
   const { key, comparator, value } = condition.when;
@@ -97,6 +115,7 @@ async function scanAndProcessDevices({deviceByMacAddrMap, staleCacheHandler}) {
 
     for (const i in plugMgmtConfig) {
       const t = plugMgmtConfig[i];
+      validateThermometerConfig(t);
       const found = _.find(_.get(goveeDevices, 'devices'), (d) => d.address === t.mac_addr);
       console.log({found})
       if (found) {
