@@ -1,6 +1,7 @@
 import _ from 'lodash';
 import getopt from 'node-getopt';
 import IotProbe from './tplink/src/iot-probe/index.js';
+import CacheManager from './cache/index.js';
 import * as tplink from './tplink/src/index.js';
 import * as govee from './govee/index.js';
 import { 
@@ -104,10 +105,12 @@ async function scanAndProcessDevices({deviceByMacAddrMap, staleCacheHandler}) {
    
     logger.info(`scanning for govee devices`);
 
-    const goveeDevices = await govee.getDevices({
+    const goveeDeviceCache = new CacheManager({cacheFile: "./govee-device-result.json"}); 
+    
+    const goveeDevices = await goveeDeviceCache.accessFromCache(govee.getDevices({
       expectedCount: _.get(rootConfig, "govee.expected_device_count"),
       timeout: _.get(rootConfig, "govee.timeout", 60000),
-    });
+    }), false);
 
     logger.info(goveeDevices['devices']);
 
@@ -181,14 +184,20 @@ const scanner = new IotProbe(scannerConfig);
 const scannedDevices = await _.invoke(scanner, 'scan', SCAN_CACHE);
 const deviceIPs = _.keys(scannedDevices);
 logger.info(`Discovered ${deviceIPs.length} devices:`, deviceIPs);
-const deviceByMacAddrMap = {};
 
-for (const ip in scannedDevices) {
-  //here we have to make requests, so we should evaluate the condition first instead
-  logger.info(`Connecting to device at ${ip}...`);
-  const { device, info } = await tplink.getDeviceInfo({email, password}, ip);
-  deviceByMacAddrMap[info.mac] = {device, info};
+const mapDeviceByMacFromIps = async (ips) => {
+  const deviceByMacAddrMap = {};
+  for (const ip in ips) {
+    //here we have to make requests, so we should evaluate the condition first instead
+    logger.info(`Connecting to device at ${ip}...`);
+    const { device, info } = await tplink.getDeviceInfo({email, password}, ip);
+    deviceByMacAddrMap[info.mac] = {device, info};
+  }
+  return deviceByMacAddrMap;
 }
+
+const tplinkDeviceCache = new CacheManager({cacheFile: "./tplink-device-result.json"});
+const deviceByMacAddrMap = await tplinkDeviceCache.accessFromCache(mapDeviceByMacFromIps(scannedDevices), false);
 
 const staleCacheHandler = async () => {
   logger.info(`stale cache handler attempting to clear the cache`);
